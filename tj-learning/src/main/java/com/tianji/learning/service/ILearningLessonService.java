@@ -33,4 +33,7 @@ public interface ILearningLessonService extends IService<LearningLesson> {
 
     // 删除课表中的课程
     void deleteCourse(Long courseId, Long user);
+
+    // 根据用户id和课程id查询课程表信息
+    LearningLesson queryByUserIdAndCourseId(Long userId, Long courseId);
 }

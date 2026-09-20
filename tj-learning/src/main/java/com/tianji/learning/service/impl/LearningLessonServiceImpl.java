@@ -194,6 +194,15 @@ public class LearningLessonServiceImpl extends ServiceImpl<LearningLessonMapper,
                 .remove();
     }
 
+    // 根据用户id和课程id查询课程表信息
+    @Override
+    public LearningLesson queryByUserIdAndCourseId(Long userId, Long courseId) {
+        return lambdaQuery()
+                .eq(LearningLesson::getUserId, userId)
+                .eq(LearningLesson::getCourseId, courseId)
+                .last("LIMIT 1")
+                .one();
+    }
 
 
 }

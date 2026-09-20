@@ -1,0 +1,18 @@
+[33mcommit 44faa764c6dc46353efc959fc44de4f503c8b2cb[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature-lessons[m[33m, [m[1;31morigin/feature-lessons[m[33m)[m
+Author: yuehao <yuehao@yuehao.top>
+Date:   Sat Sep 19 17:44:06 2026 +0800
+
+    day2课程代码：退款后移除课表课程、Feign校验课程有效性、统计课程学习人数等功能
+
+ .vscode/settings.json                              |   3 [32m+[m
+ .../controller/LearningLessonController.java       |  57 [32m++++++[m
+ .../tianji/learning/domain/po/LearningLesson.java  |  72 [32m++++++++[m
+ .../learning/domain/vo/LearningLessonVO.java       |  57 [32m++++++[m
+ .../com/tianji/learning/enums/LessonStatus.java    |  38 [32m++++[m
+ .../java/com/tianji/learning/enums/PlanStatus.java |  37 [32m++++[m
+ .../learning/mapper/LearningLessonMapper.java      |  16 [32m++[m
+ .../tianji/learning/mq/LessonChangeListener.java   |  68 [32m+++++++[m
+ .../learning/service/ILearningLessonService.java   |  36 [32m++++[m
+ .../service/impl/LearningLessonServiceImpl.java    | 199 [32m+++++++++++++++++++++[m
+ .../main/resources/mapper/LearningLessonMapper.xml |   5 [32m+[m
+ 11 files changed, 588 insertions(+)
