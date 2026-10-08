@@ -6,7 +6,11 @@ import com.tianji.common.domain.query.PageQuery;
 import com.tianji.learning.domain.po.LearningLesson;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.tianji.learning.domain.vo.LearningLessonVO;
+import com.tianji.learning.domain.vo.LearningPlanPageVO;
+import org.hibernate.validator.constraints.Range;
 
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotNull;
 import java.util.List;
 
 /**
@@ -36,4 +40,10 @@ public interface ILearningLessonService extends IService<LearningLesson> {
 
     // 根据用户id和课程id查询课程表信息
     LearningLesson queryByUserIdAndCourseId(Long userId, Long courseId);
+
+    // 创建学习计划
+    void createLearningPlan(@NotNull @Min(1) Long courseId, @NotNull @Range(min = 1, max = 50) Integer freq);
+
+    // 查询我的学习计划
+    LearningPlanPageVO queryMyPlans(PageQuery query);
 }

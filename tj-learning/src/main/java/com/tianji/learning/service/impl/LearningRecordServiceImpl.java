@@ -4,7 +4,6 @@ import com.tianji.api.client.course.CourseClient;
 import com.tianji.api.dto.course.CourseFullInfoDTO;
 import com.tianji.api.dto.leanring.LearningLessonDTO;
 import com.tianji.api.dto.leanring.LearningRecordDTO;
-import com.tianji.common.exceptions.BadRequestException;
 import com.tianji.common.exceptions.BizIllegalException;
 import com.tianji.common.exceptions.DbException;
 import com.tianji.common.utils.BeanUtils;
@@ -18,12 +17,12 @@ import com.tianji.learning.mapper.LearningRecordMapper;
 import com.tianji.learning.service.ILearningLessonService;
 import com.tianji.learning.service.ILearningRecordService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.tianji.learning.utils.LearningRecordDelayTaskHandler;
 import lombok.RequiredArgsConstructor;
-import org.apache.ibatis.ognl.BooleanExpression;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.validation.BindException;
 
+import javax.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -42,6 +41,8 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
     private final CourseClient courseClient;
 
     private final ILearningLessonService lessonService;
+
+    private final LearningRecordDelayTaskHandler TaskHandler;
 
     // 查询指定课程的学习记录
     @Override
@@ -83,17 +84,19 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
             finished = handleExamRecord(userId, recordDto);
         }
 
+        if (!finished) {
+            //没有新学完的小结,无需更新课表中的学习进度
+            return;
+        }
+
         //3.处理课表数据
-        handleLearningLessonsChanges(recordDto, finished);
+        handleLearningLessonsChanges(recordDto);
     }
 
     //处理视频
     private boolean handleVideoRecord(Long userId, LearningRecordFormDTO recordDto) {
         //1.查询旧的学习记录
-        LearningRecord old = lambdaQuery()
-                .eq(LearningRecord::getLessonId, recordDto.getLessonId())
-                .eq(LearningRecord::getSectionId, recordDto.getSectionId())
-                .one();
+        LearningRecord old = queryOldRecord(recordDto.getLessonId(), recordDto.getSectionId());
         //2.判断是否存在
         if (old == null) {
             //3.不存在则新增
@@ -112,6 +115,15 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
         //4.1判断是否是第一次完成
         //如果old完成状态为false，且时长到了总时长一半时，说明是第一次完成
         boolean finished = !old.getFinished() && recordDto.getMoment() * 2 >= recordDto.getDuration();
+        if (!finished) {
+            LearningRecord record = new LearningRecord();
+            record.setLessonId(recordDto.getLessonId());
+            record.setSectionId(recordDto.getSectionId());
+            record.setMoment(recordDto.getMoment());
+            record.setId(old.getId());
+            record.setFinished(old.getFinished());
+            TaskHandler.addLearningRecordTask(record);
+        }
         //4.2更新数据
         boolean success = lambdaUpdate()
                 .set(LearningRecord::getMoment, recordDto.getMoment())
@@ -122,7 +134,28 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
         if (!success) {
             throw new DbException("更新视频学习记录失败");
         }
+        //4.3清理缓存
+        TaskHandler.cleanRecordCache(recordDto.getLessonId(), recordDto.getSectionId());
         return finished;
+    }
+
+    private LearningRecord queryOldRecord(@NotNull(message = "课表id不能为空") Long lessonId, @NotNull(message = "节的id不能为空") Long sectionId) {
+        //1.查询缓存
+        LearningRecord record = TaskHandler.readRecordCache(lessonId, sectionId);
+        //2.如果命中直接返回
+        if (record != null) {
+            log.debug("从缓存中命中学习记录: "+record);
+            return record;
+        }
+        //3.未命中,查询数据库
+        record = lambdaQuery()
+                .eq(LearningRecord::getLessonId, lessonId)
+                .eq(LearningRecord::getSectionId, sectionId)
+                .one();
+        //4.写入缓存
+        TaskHandler.writeRecordCache(record);
+
+        return record;
     }
 
     //处理考试的学习记录
@@ -143,7 +176,7 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
     }
 
     //处理课表数据
-    private void handleLearningLessonsChanges(LearningRecordFormDTO recordDto, boolean finished) {
+    private void handleLearningLessonsChanges(LearningRecordFormDTO recordDto) {
         //1.查询课表已经学习的小结数量
         LearningLesson lesson = lessonService.getById(recordDto.getLessonId());
         if (lesson == null) {
@@ -153,24 +186,22 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
         boolean allLearned = false;
 
         //2.判断是否有新的完成小结
-        if (finished) {
-            //3.如果有新完成的小结,则需要查询课程数据
-            //这里查询到课程的信息
-            CourseFullInfoDTO cInfo = courseClient.getCourseInfoById(lesson.getCourseId(), false, false);
-            if (cInfo == null) {
-                throw new BizIllegalException("课程不存在,无法更新数据!");
-            }
-            //4.比较课程是否全部学完,已学习小结 >= 总小节
-            allLearned = lesson.getLatestSectionId() + 1 >= cInfo.getSectionNum();
+
+        //3.如果有新完成的小结,则需要查询课程数据
+        //这里查询到课程的信息
+        CourseFullInfoDTO cInfo = courseClient.getCourseInfoById(lesson.getCourseId(), false, false);
+        if (cInfo == null) {
+            throw new BizIllegalException("课程不存在,无法更新数据!");
         }
+        //4.比较课程是否全部学完,已学习小结 >= 总小节
+        allLearned = lesson.getLatestSectionId() + 1 >= cInfo.getSectionNum();
+
         //5.更新课表
         lessonService.lambdaUpdate()
                 //如果allLearned为true,则更新课表状态为已完成
                 .set(allLearned, LearningLesson::getStatus, LessonStatus.FINISHED.getValue())
                 //如果finished为true,则更新已学习小结数量
-                .setSql(finished, "learned_sections = learned_sections + 1")
-                //如果finished为false,则更新最新学习时间
-                .set(!finished, LearningLesson::getLatestLearnTime, recordDto.getCommitTime())
+                .setSql("learned_sections = learned_sections + 1")
                 //当为第一次学习这个课表中的这个小结时,将该课表状态设置为学习中
                 .set(lesson.getLearnedSections() == 0, LearningLesson::getStatus, LessonStatus.LEARNING.getValue())
                 .eq(LearningLesson::getId, recordDto.getLessonId())
