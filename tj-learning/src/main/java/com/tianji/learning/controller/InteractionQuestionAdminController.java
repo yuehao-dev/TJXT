@@ -2,18 +2,13 @@ package com.tianji.learning.controller;
 
 
 import com.tianji.common.domain.dto.PageDTO;
-import com.tianji.learning.domain.dto.QuestionFormDTO;
 import com.tianji.learning.domain.query.QuestionAdminPageQuery;
-import com.tianji.learning.domain.query.QuestionPageQuery;
 import com.tianji.learning.domain.vo.QuestionAdminVO;
-import com.tianji.learning.domain.vo.QuestionVO;
 import com.tianji.learning.service.IInteractionQuestionService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-
-import javax.validation.Valid;
 
 /**
  * <p>
@@ -31,9 +26,6 @@ public class InteractionQuestionAdminController {
 
     private final IInteractionQuestionService questionService;
 
-
-
-
     @ApiOperation(value = "管理端查询互动问题分页")
     @GetMapping("page")
     //get请求通过url编码拼接,不用加注解
@@ -41,5 +33,10 @@ public class InteractionQuestionAdminController {
         return questionService.queryQuestionPageAdmin(query);
     }
 
+    @ApiOperation(value = "管理端根据id查询问题详情")
+    @GetMapping("{id}")
+    public QuestionAdminVO queryQuestionByIdAdmin(@PathVariable("id") Long id) {
+        return questionService.queryQuestionByIdAdmin(id);
+    }
 
 }

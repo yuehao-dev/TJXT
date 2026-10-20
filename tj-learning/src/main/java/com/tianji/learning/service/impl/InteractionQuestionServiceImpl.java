@@ -10,6 +10,7 @@ import com.tianji.api.dto.course.CataSimpleInfoDTO;
 import com.tianji.api.dto.course.CourseSimpleInfoDTO;
 import com.tianji.api.dto.user.UserDTO;
 import com.tianji.common.domain.dto.PageDTO;
+import com.tianji.common.exceptions.BadRequestException;
 import com.tianji.common.utils.*;
 import com.tianji.learning.domain.dto.QuestionFormDTO;
 import com.tianji.learning.domain.po.InteractionQuestion;
@@ -18,6 +19,7 @@ import com.tianji.learning.domain.query.QuestionAdminPageQuery;
 import com.tianji.learning.domain.query.QuestionPageQuery;
 import com.tianji.learning.domain.vo.QuestionAdminVO;
 import com.tianji.learning.domain.vo.QuestionVO;
+import com.tianji.learning.enums.QuestionStatus;
 import com.tianji.learning.mapper.InteractionQuestionMapper;
 import com.tianji.learning.service.IInteractionQuestionService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -326,5 +328,73 @@ public class InteractionQuestionServiceImpl extends ServiceImpl<InteractionQuest
 
         // 5. 封装成通用分页对象返回（分页信息 + 本页VO列表）
         return PageDTO.of(page, voList);
+    }
+
+    /**
+     * 管理端根据id查询问题详情
+     * 除了问题本身，还需要补全提问者、课程、分类、章节等信息，
+     * 查询完成后把问题状态更新为"已查看"。
+     *
+     * @param id 问题id
+     * @return 问题详情
+     */
+    @Override
+    public QuestionAdminVO queryQuestionByIdAdmin(Long id) {
+        // 1. 参数校验
+        if (id == null) {
+            throw new BadRequestException("问题id不能为空");
+        }
+        // 2. 查询问题
+        InteractionQuestion question = getById(id);
+        if (question == null) {
+            throw new BadRequestException("问题不存在");
+        }
+        // 3. 转VO
+        QuestionAdminVO vo = BeanUtils.copyBean(question, QuestionAdminVO.class);
+        if (question.getStatus() != null) {
+            vo.setStatus(question.getStatus().getValue());
+        }
+        // 4. 补全提问者信息
+        UserDTO user = userClient.queryUserById(question.getUserId());
+        if (user != null) {
+            vo.setUserName(user.getName());
+            vo.setUserIcon(user.getIcon());
+        }
+        // 5. 补全课程与分类信息
+        if (question.getCourseId() != null) {
+            List<CourseSimpleInfoDTO> courses = courseClient.getSimpleInfoList(
+                    Collections.singletonList(question.getCourseId()));
+            if (CollUtils.isNotEmpty(courses)) {
+                CourseSimpleInfoDTO course = courses.get(0);
+                vo.setCourseName(course.getName());
+                vo.setCategoryName(categoryCache.getCategoryNames(course.getCategoryIds()));
+            }
+        }
+        // 6. 补全章、节名称
+        Set<Long> cataIds = new HashSet<>();
+        if (question.getChapterId() != null) {
+            cataIds.add(question.getChapterId());
+        }
+        if (question.getSectionId() != null) {
+            cataIds.add(question.getSectionId());
+        }
+        if (CollUtils.isNotEmpty(cataIds)) {
+            List<CataSimpleInfoDTO> catas = catalogueClient.batchQueryCatalogue(cataIds);
+            if (CollUtils.isNotEmpty(catas)) {
+                Map<Long, String> cataMap = catas.stream()
+                        .collect(Collectors.toMap(CataSimpleInfoDTO::getId, CataSimpleInfoDTO::getName));
+                vo.setChapterName(cataMap.getOrDefault(question.getChapterId(), ""));
+                vo.setSectionName(cataMap.getOrDefault(question.getSectionId(), ""));
+            }
+        }
+        // 7. 管理端查看后，标记为已查看
+        if (question.getStatus() == QuestionStatus.UN_CHECK) {
+            lambdaUpdate()
+                    .eq(InteractionQuestion::getId, id)
+                    .set(InteractionQuestion::getStatus, QuestionStatus.CHECKED)
+                    .update();
+            vo.setStatus(QuestionStatus.CHECKED.getValue());
+        }
+        return vo;
     }
 }
