@@ -1,11 +1,15 @@
 package com.tianji.api.config;
 
 import com.tianji.api.client.learning.fallback.LearningClientFallback;
+import com.tianji.api.client.remark.fallback.RemarkClientFallback;
 import com.tianji.api.client.trade.fallback.TradeClientFallback;
 import com.tianji.api.client.user.fallback.UserClientFallback;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * 降级配置类主要用于配置Feign的降级策略
+ */
 @Configuration
 public class FallbackConfig {
     @Bean
@@ -23,4 +27,8 @@ public class FallbackConfig {
         return new UserClientFallback();
     }
 
+    @Bean
+    public RemarkClientFallback remarkClientFallback(){
+        return new RemarkClientFallback();
+    }
 }
