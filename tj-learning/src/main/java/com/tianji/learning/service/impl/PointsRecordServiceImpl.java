@@ -4,12 +4,16 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.tianji.common.utils.CollUtils;
 import com.tianji.common.utils.DateUtils;
 import com.tianji.common.utils.UserContext;
+import com.tianji.learning.constants.RedisConstants;
 import com.tianji.learning.domain.po.PointsRecord;
 import com.tianji.learning.domain.vo.PointsStatisticsVO;
 import com.tianji.learning.enums.PointsRecordType;
 import com.tianji.learning.mapper.PointsRecordMapper;
 import com.tianji.learning.service.IPointsRecordService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -25,16 +29,21 @@ import java.util.List;
  * @since 2026-10-21
  */
 @Service
+@RequiredArgsConstructor
 public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, PointsRecord> implements IPointsRecordService {
+
+    private final StringRedisTemplate redisTemplate;
+
 
     @Override
     public void addPointsRecord(Long userId, int points, PointsRecordType type) {
         int maxPoints = type.getMaxPoints();
+        LocalDateTime now = LocalDateTime.now();
+
         //1.判断当前方式有没有积分上限
         int realPoints = points;
         if (maxPoints > 0) {
             //2.有,则需要判断是否超过上限
-            LocalDateTime now = LocalDateTime.now();
             LocalDateTime begin = DateUtils.getDayStartTime(now);
             LocalDateTime end = DateUtils.getDayEndTime(now);
             //2.1查询今日已得积分
@@ -55,6 +64,11 @@ public class PointsRecordServiceImpl extends ServiceImpl<PointsRecordMapper, Poi
         p.setUserId(userId);
         p.setType(type);
         save(p);
+
+        //4.累计积分数据到Redis的SortedSet中
+        String key = RedisConstants.POINTS_BOARD_KEY_PREFIX + now.format(DateUtils.POINTS_BOARD_DATE_SUFFIX_FORMATTER);
+        Double v = redisTemplate.opsForZSet().incrementScore(key, userId.toString(), realPoints);
+
     }
 
 

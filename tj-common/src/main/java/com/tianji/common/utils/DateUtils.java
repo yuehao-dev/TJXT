@@ -40,7 +40,7 @@ public class DateUtils extends LocalDateTimeUtil {
             DateTimeFormatter.ofPattern(":yyyyMM");
 
     public static final DateTimeFormatter POINTS_BOARD_DATE_SUFFIX_FORMATTER =
-            DateTimeFormatter.ofPattern(":yyyyMM");
+            DateTimeFormatter.ofPattern("yyyyMM");
 
     public static final String TIME_ZONE_8 = "GMT+8";
 
