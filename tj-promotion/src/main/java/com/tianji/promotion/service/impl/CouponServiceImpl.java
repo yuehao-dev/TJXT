@@ -132,7 +132,8 @@ public class CouponServiceImpl extends ServiceImpl<CouponMapper, Coupon> impleme
         //4.2更新状态
         if (isBegin) {
             c.setStatus(CouponStatus.ISSUING);
-            c.setIssueBeginTime(issueBeginTime);
+            //todo 自己改的 立即发放时,若未指定开始时间,则记录为当前时刻,避免 issue_begin_time 为空
+            c.setIssueBeginTime(issueBeginTime == null ? now : issueBeginTime);
         } else {
             c.setStatus(CouponStatus.UN_ISSUE);
         }

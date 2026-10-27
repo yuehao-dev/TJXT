@@ -42,4 +42,4 @@ tj:
     resource:
       enable: true
       exclude-login-paths:
-        - /coupon/list
+        - /coupons/list

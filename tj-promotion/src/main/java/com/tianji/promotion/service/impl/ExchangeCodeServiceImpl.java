@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.tianji.promotion.constans.PromotionConstants.COUPON_CODE_MAP_KEY;
 import static com.tianji.promotion.constans.PromotionConstants.COUPON_CODE_SERIAL_KEY;
 
 /**
@@ -27,9 +28,11 @@ import static com.tianji.promotion.constans.PromotionConstants.COUPON_CODE_SERIA
 @Service
 public class ExchangeCodeServiceImpl extends ServiceImpl<ExchangeCodeMapper, ExchangeCode> implements IExchangeCodeService {
 
+    private final StringRedisTemplate redisTemplate;
     private final BoundValueOperations<String, String> serialOps;
 
     public ExchangeCodeServiceImpl(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
         this.serialOps = redisTemplate.boundValueOps(COUPON_CODE_SERIAL_KEY);
     }
 
@@ -46,7 +49,7 @@ public class ExchangeCodeServiceImpl extends ServiceImpl<ExchangeCodeMapper, Exc
         int maxSerialNum = result.intValue();
 
         List<ExchangeCode> list = new ArrayList<>(totalNum);
-        for (int serialNum = maxSerialNum-totalNum+1; serialNum <= maxSerialNum; serialNum++) {
+        for (int serialNum = maxSerialNum - totalNum + 1; serialNum <= maxSerialNum; serialNum++) {
 
             //2.生成兑换码
             String code = CodeUtil.generateCode(serialNum, coupon.getId());
@@ -60,5 +63,11 @@ public class ExchangeCodeServiceImpl extends ServiceImpl<ExchangeCodeMapper, Exc
         //3.保存数据库
         saveBatch(list);
 
+    }
+
+    @Override
+    public boolean updateExchangeMark(long serialNum, boolean mark) {
+        Boolean boo = redisTemplate.opsForValue().setBit(COUPON_CODE_MAP_KEY, serialNum, mark);
+        return boo != null && boo;
     }
 }
