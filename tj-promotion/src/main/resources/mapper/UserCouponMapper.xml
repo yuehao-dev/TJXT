@@ -2,4 +2,21 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.tianji.promotion.mapper.UserCouponMapper">
 
+    <select id="queryMyCoupons" resultType="com.tianji.promotion.domain.po.Coupon"
+            parameterType="java.lang.Long">
+
+        select c.id
+             , c.discount_type
+             , c.`specific`
+             , c.discount_value
+             , c.threshold_amount
+             , c.max_discount_amont
+             , uc.id as creater
+        from user_coupon uc
+                 inner join coupon c on c.id = uc.coupon_id
+        where uc.user_id = #{userId}
+          and uc.status = 1
+
+
+    </select>
 </mapper>

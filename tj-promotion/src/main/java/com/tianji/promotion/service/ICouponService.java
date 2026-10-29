@@ -29,4 +29,6 @@ public interface ICouponService extends IService<Coupon> {
     void beginIssue(@Valid CouponIssueFormDTO dto);
 
     List<CouponVO> queryIssuingCoupons();
+
+    void pauseIssue(Long id);
 }

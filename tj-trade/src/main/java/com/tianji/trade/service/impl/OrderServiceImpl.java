@@ -4,8 +4,11 @@ import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.tianji.api.client.course.CourseClient;
+import com.tianji.api.client.promotion.PromotionClient;
 import com.tianji.api.constants.CourseStatus;
 import com.tianji.api.dto.course.CourseSimpleInfoDTO;
+import com.tianji.api.dto.promotion.CouponDiscountDTO;
+import com.tianji.api.dto.promotion.OrderCourseDTO;
 import com.tianji.api.dto.trade.OrderBasicDTO;
 import com.tianji.common.autoconfigure.mq.RabbitMqHelper;
 import com.tianji.common.constants.MqConstants;
@@ -38,6 +41,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static com.tianji.common.constants.ErrorInfo.Msg.OPERATE_FAILED;
@@ -61,7 +65,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private final ICartService cartService;
     private final TradeProperties tradeProperties;
     private final RabbitMqHelper rabbitMqHelper;
-
+    private final PromotionClient promotionClient;
     @Override
     @Transactional
     public PlaceOrderResultVO placeOrder(PlaceOrderDTO placeOrderDTO) {
@@ -191,8 +195,23 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         List<OrderCourseVO> courses = BeanUtils.copyList(courseInfos, OrderCourseVO.class);
         // 2.计算总价
         int total = courseInfos.stream().mapToInt(CourseSimpleInfoDTO::getPrice).sum();
-        // TODO 3.计算折扣
-        int discountAmount = 0;
+        // 3.查询折扣方案
+        List<OrderCourseDTO> orderCourses = courseInfos.stream()
+                .map(c -> new OrderCourseDTO()
+                        .setId(c.getId())
+                        .setCateId(c.getThirdCateId())
+                        .setPrice(c.getPrice()))
+                .collect(Collectors.toList());
+        List<CouponDiscountDTO> solutions = promotionClient.findDiscountSolution(orderCourses);
+        // 4.计算优惠金额
+        int discountAmount = solutions.stream()
+                .map(CouponDiscountDTO::getDiscountAmount)
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .sum();
+        if (discountAmount > total) {
+            discountAmount = total;
+        }
         // 4.生成订单id
         long orderId = IdWorker.getId();
         // 5.组织返回
